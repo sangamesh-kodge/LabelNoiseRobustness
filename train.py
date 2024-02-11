@@ -112,6 +112,7 @@ def main():
                         help='')
     parser.add_argument('--model-path', type=str, default='./', 
                         help='')
+    
     ### wandb parameters
     parser.add_argument('--project-name', type=str, default='Compare', 
                         help='')
@@ -134,6 +135,8 @@ def main():
     parser.add_argument('--mixup-alpha',type=float, default=None, 
                         help='to do MixUp') 
     parser.add_argument('--do-not-save', action='store_true', default=False,
+                        help='For Saving the current Model') 
+    parser.add_argument('--use_valset', action='store_true', default=False,
                         help='For Saving the current Model') 
     args = parser.parse_args()
     args.train_transform = not args.no_train_transform
@@ -166,26 +169,29 @@ def main():
     model = get_model(args, device)
 
     dataset_corrupt, corrupt_samples, (index_list, old_targets, updated_targets) = get_mislabeled_dataset(copy.deepcopy(dataset1), args.percentage_mislabeled, args.num_classes, args.clean_partition, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}")
-    ### split corrupt data into train and val.
-    num_of_data_points = len(dataset_corrupt)
-    num_of_val_samples = int(0.1 * num_of_data_points)
-    r=np.arange(num_of_data_points)
-    np.random.shuffle(r)
-    val_index = r[:num_of_val_samples].tolist()
-    if args.clean_partition:
-        if os.path.exists(f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.clean_val_index"):
-            val_index = torch.load(f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.clean_val_index") 
+    if args.use_valset:
+        ### split corrupt data into train and val.
+        num_of_data_points = len(dataset_corrupt)
+        num_of_val_samples = int(0.1 * num_of_data_points)
+        r=np.arange(num_of_data_points)
+        np.random.shuffle(r)
+        val_index = r[:num_of_val_samples].tolist()
+        if args.clean_partition:
+            if os.path.exists(f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.clean_val_index"):
+                val_index = torch.load(f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.clean_val_index") 
+            else:
+                torch.save(val_index, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.clean_val_index") 
         else:
-            torch.save(val_index, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.clean_val_index") 
+            if os.path.exists(f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.corrupt_val_index"):
+                val_index = torch.load(f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.corrupt_val_index") 
+            else:
+                torch.save(val_index, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.corrupt_val_index") 
+        train_index = [idx for idx in np.arange(num_of_data_points) if idx not in val_index]
+        trainset_corrupt = torch.utils.data.Subset(dataset_corrupt, train_index)
+        valset_corrupt = torch.utils.data.Subset(dataset_corrupt, val_index)
     else:
-        if os.path.exists(f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.corrupt_val_index"):
-            val_index = torch.load(f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.corrupt_val_index") 
-        else:
-            torch.save(val_index, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.corrupt_val_index") 
-    train_index = [idx for idx in np.arange(num_of_data_points) if idx not in val_index]
-    trainset_corrupt = torch.utils.data.Subset(dataset_corrupt, train_index)
-    valset_corrupt = torch.utils.data.Subset(dataset_corrupt, val_index)
-
+        trainset_corrupt = dataset_corrupt
+        valset_corrupt = None
 
     if args.mixup_alpha is not None:
         mixup_function = v2.MixUp(alpha=args.mixup_alpha, num_classes=args.num_classes) 
@@ -195,7 +201,8 @@ def main():
         def collate_fn(batch):
             return default_collate(batch)
     train_loader_corrupt = torch.utils.data.DataLoader(trainset_corrupt,**train_kwargs, collate_fn=collate_fn)
-    val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)
+    if args.use_valset:
+        val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
 
     # Set the training hyperparameters.     
@@ -242,7 +249,8 @@ def main():
     # Train  
     for epoch in range(1, args.epochs + 1):
         train_loss = train(args, model, device, train_loader_corrupt, optimizer, epoch)
-        test(model, device, val_loader_corrupt, args.num_classes)
+        if args.use_valset:
+            test(model, device, val_loader_corrupt, args.num_classes)
         test(model, device, test_loader, args.num_classes, set_name="Test Set")
         if scheduler:
             if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
