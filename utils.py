@@ -7,6 +7,7 @@ from models.vgg import vgg11, vgg11_bn, vgg13, vgg13_bn, vgg16, vgg16_bn, vgg19,
 from models.resnet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 from models.Linear5 import Linear5
 from models.LeNet5 import LeNet5
+from models.inceptionresnetv2 import inceptionresnetv2
 from models.vit import vit_b_16, vit_b_32,  vit_l_16, vit_l_32, vit_h_14
 from torchvision import datasets
 from torchvision.transforms import v2
@@ -93,8 +94,12 @@ def get_dataset(args):
             raise ValueError
         
     elif "imagenet" in args.dataset.lower() or "webvision" in args.dataset.lower():
+        if args.arch.lower() == "inceptionresnetv2":
+            args.resize_image = 299
+        else:
+            args.resize_image = 224
         train_transform=v2.Compose([ 
-            v2.RandomResizedCrop((224,224)),
+            v2.RandomResizedCrop((args.resize_image,args.resize_image)),
             v2.RandomHorizontalFlip(),
             v2.ToTensor(),
             v2.Normalize(mean=[0.485, 0.456, 0.406],
@@ -102,7 +107,7 @@ def get_dataset(args):
             ])
 
         test_transform=v2.Compose([
-            v2.Resize((224,224)),
+            v2.Resize((args.resize_image,args.resize_image)),
             v2.ToTensor(),
             v2.Normalize(mean=[0.485, 0.456, 0.406],
                                             std=[0.229, 0.224, 0.225])     
@@ -226,7 +231,9 @@ def get_model(args,device):
     elif "resnet34" in args.arch.lower():
         model = ResNet34(num_classes=args.num_classes, dataset=args.dataset.lower()).to(device)
     elif "resnet18" in args.arch.lower():
-        model = ResNet18(num_classes=args.num_classes, dataset=args.dataset.lower()).to(device)
+        model = ResNet18(num_classes=args.num_classes,dataset=args.dataset.lower()).to(device)  
+    elif "inceptionresnetv2" in args.arch.lower():
+        model = inceptionresnetv2(num_classes=args.num_classes, pretrained=False).to(device)
     elif "vit_b_16" in args.arch.lower():
         model = vit_b_16().to(device)
     elif "vit_b_32" in args.arch.lower():
