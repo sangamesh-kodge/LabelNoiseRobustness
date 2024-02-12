@@ -10,7 +10,7 @@ import wandb
 from sklearn.metrics import confusion_matrix
 import numpy as np
 import os
-from utils import get_dataset, get_model, get_mislabeled_dataset, SAM, loss_gls
+from utils import get_dataset, get_model, get_mislabeled_dataset, SAM, loss_gls, EarlyStopper
 import random 
 import copy
 from torchvision.transforms import v2
@@ -81,6 +81,7 @@ def test(model, device, test_loader, num_classes=10, set_name = "Val Set"):
                 f"{set_name}/classwise/test_acc":dict_classwise_acc
                 }
                 )
+    return test_loss
 
 def main():
     # Training settings
@@ -147,6 +148,8 @@ def main():
                         help='to do MixUp') 
     parser.add_argument('--gls-smoothing',type=float, default=None, 
                         help='Use GLS with given smoothening rate') 
+    parser.add_argument('--estop-delta',type=float, default=None, 
+                        help='change in loss to theshold for 3 checks of early stopping') 
     args = parser.parse_args()
     args.train_transform = not args.no_train_transform
     if args.seed == None:
@@ -179,6 +182,37 @@ def main():
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))
 
+    # Set the training hyperparameters.     
+    group_name = f"{args.group_name}-{args.arch}"
+    model_name = f"{args.dataset}_{args.arch}"
+    run_name = f"seed{args.seed}_lr{args.lr}_wd{args.weight_decay}_bsz{args.batch_size}"
+    if args.sam_rho is not None:
+        group_name = f"{group_name}-SAM"
+        model_name = f"{model_name}_sam"
+        run_name = f"{run_name}_sam-rho{args.sam_rho}"
+        base_optimizer = torch.optim.SGD
+        optimizer = SAM(model.parameters(), base_optimizer, rho=args.sam_rho, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
+    else:
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
+
+    if args.mixup_alpha is not None:
+        group_name = f"{group_name}-MixUp"
+        model_name = f"{model_name}_mixup"
+        run_name = f"{run_name}_mixup-alpha{args.mixup_alpha}"
+
+    if args.gls_smoothing is not None:
+        group_name = f"{group_name}-GLS"
+        model_name = f"{model_name}_gls"
+        run_name = f"{run_name}_gls-smoothing{args.gls_smoothing}"
+    
+
+    if args.estop_delta is not None:
+        group_name = f"{group_name}-EStop"
+        model_name = f"{model_name}_estop"
+        run_name = f"{run_name}_early-stopping{args.estop_delta}"
+        args.use_valset = True
+        early_stopper = EarlyStopper(patience=3, min_delta=args.estop_delta)
+        
     dataset_corrupt, corrupt_samples, (index_list, old_targets, updated_targets) = get_mislabeled_dataset(copy.deepcopy(dataset1), args.percentage_mislabeled, args.num_classes, args.clean_partition, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}")
     if args.use_valset:
         ### split corrupt data into train and val.
@@ -211,34 +245,13 @@ def main():
     else:
         def collate_fn(batch):
             return default_collate(batch)
-        
+    
     train_loader_corrupt = torch.utils.data.DataLoader(trainset_corrupt,**train_kwargs, collate_fn=collate_fn)
     if args.use_valset:
         val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)
+    
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
 
-    # Set the training hyperparameters.     
-    group_name = f"{args.group_name}-{args.arch}"
-    model_name = f"{args.dataset}_{args.arch}"
-    run_name = f"seed{args.seed}_lr{args.lr}_wd{args.weight_decay}_bsz{args.batch_size}"
-    if args.sam_rho is not None:
-        base_optimizer = torch.optim.SGD
-        optimizer = SAM(model.parameters(), base_optimizer, rho=args.sam_rho, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
-        group_name = f"{group_name}-SAM"
-        model_name = f"{model_name}_sam"
-        run_name = f"{run_name}_sam-rho{args.sam_rho}"
-    else:
-        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
-
-    if args.mixup_alpha is not None:
-        group_name = f"{group_name}-MixUp"
-        model_name = f"{model_name}_mixup"
-        run_name = f"{run_name}_mixup-alpha{args.mixup_alpha}"
-
-    if args.gls_smoothing is not None:
-        group_name = f"{group_name}-GLS"
-        model_name = f"{model_name}_gls"
-        run_name = f"{run_name}_gls-smoothing{args.gls_smoothing}"
 
     if args.clean_partition:
         model_name = f"{model_name}_CleanData{1-args.percentage_mislabeled}_seed{args.seed}"
@@ -268,7 +281,10 @@ def main():
     for epoch in range(1, args.epochs + 1):
         train_loss = train(args, model, device, train_loader_corrupt, optimizer, epoch)
         if args.use_valset:
-            test(model, device, val_loader_corrupt, args.num_classes)
+            validation_loss=test(model, device, val_loader_corrupt, args.num_classes)
+        if args.estop_delta is not None:
+            if early_stopper.early_stop(validation_loss):             
+                break
         test(model, device, test_loader, args.num_classes, set_name="Test Set")
         if scheduler:
             if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):

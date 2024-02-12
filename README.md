@@ -56,12 +56,12 @@ pip install -r requirements.txt
 
 3. [Negative Label Smoothening](https://arxiv.org/pdf/2106.04149.pdf)(NLS) - is a variant of Label Smoothing (LS) that uses a negative weight to combine the hard and soft labels. It is designed to improve the robustness of the model when learning with noisy labels, especially in high noise regimes. To use NLS, you can add the cli argument ```--gls-smoothing <value-of-hyperparameter-smoothing-rate>```. For example, ```--gls-smoothing -0.2``` means using NLS with a weight of -0.2 for the soft labels.
 
+4. [Early stopping](https://arxiv.org/abs/1903.11680) - is a regularization technique that stops the training of a neural network when the performance on a validation set stops improving or starts to deteriorate. It prevents overfitting by avoiding training the model for too many epochs, which can cause the model to memorize the training data and lose generalization ability. To use Early Stopping, you can add the cli argument ```--estop-delta <value-of-hyperparameter-min-delta>```. For example, ```--estop-delta 0.05``` means using min_delta  of 0.05.
 
 ### Stay tuned for future updates
 The following methods are planned to be implemented:
 
 - [Sample Sieve](https://openreview.net/forum?id=2VXyy9mIyU3)
-- [Early stopping](https://arxiv.org/abs/1903.11680)
 - [Curvature Penalty](https://openreview.net/pdf?id=2B2xIJ299rx) 
 - [MentorNet](https://arxiv.org/pdf/1712.05055.pdf)
 - [MentorMix](https://arxiv.org/pdf/1911.09781.pdf) 

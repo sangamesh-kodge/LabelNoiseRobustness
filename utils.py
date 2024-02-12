@@ -326,6 +326,27 @@ def loss_gls(logits, labels, smooth_rate=0.1):
     num_batch = len(loss_numpy)
     return torch.sum(loss)/num_batch
 
+
+# Early stopper taken from https://stackoverflow.com/questions/71998978/early-stopping-in-pytorch
+class EarlyStopper:
+    def __init__(self, patience=1, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.min_validation_loss = float('inf')
+
+    def early_stop(self, validation_loss):
+        if validation_loss < self.min_validation_loss:
+            self.min_validation_loss = validation_loss
+            self.counter = 0
+        elif validation_loss > (self.min_validation_loss + self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
+
+
+
 def MentorMixLoss(args,MentorNet, StudentNet, x_i, y_i,v_true, loss_p_prev, loss_p_second_prev, epoch):
     '''
     v_true is set to 0s in this version.
