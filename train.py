@@ -102,7 +102,7 @@ def main():
                         help='quickly check a single pass')
     parser.add_argument('--seed', type=int, default=None, metavar='S',
                         help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+    parser.add_argument('--log-interval', type=int, default=50, metavar='N',
                         help='how many batches to wait before logging training status')
     parser.add_argument('--no-train-transform', action='store_false', default=False,
                         help='For Saving the current Model')
