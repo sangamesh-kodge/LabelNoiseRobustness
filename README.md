@@ -49,17 +49,18 @@ pip install -r requirements.txt
 
 ## Methods Implemented
 
-1. [Mixup](https://arxiv.org/pdf/1806.05236.pdf)- enhances model robustness by linearly interpolating between pairs of training examples and their corresponding labels. Specifically, it generates augmented training samples by blending two input samples and their labels. This process introduces beneficial noise during training, which helps the model learn more effectively even when the training data contains noisy labels.
+1. [Mixup](https://arxiv.org/pdf/1806.05236.pdf)- enhances model robustness by linearly interpolating between pairs of training examples and their corresponding labels. Specifically, it generates augmented training samples by blending two input samples and their labels. This process introduces beneficial noise during training, which helps the model learn more effectively even when the training data contains noisy labels. To use mixup add the cli argument ```--mixup-alpha <value-of-hyperparameter-alpha>```. For example, ```--mixup-alpha 0.2``` means the alpha hyperparameter is set to 0.1.
 
-2. [SAM (Sharpness-Aware Minimization)](https://arxiv.org/pdf/2010.01412.pdf)- Instead of solely minimizing the loss value, SAM aims to find a balance between low loss and smoothness. It encourages the model to explore regions with uniformly low loss, avoiding sharp spikes that might lead to overfitting. SAM exhibits remarkable resilience to noisy labels.
+2. [SAM (Sharpness-Aware Minimization)](https://arxiv.org/pdf/2010.01412.pdf)- Instead of solely minimizing the loss value, SAM aims to find a balance between low loss and smoothness. It encourages the model to explore regions with uniformly low loss, avoiding sharp spikes that might lead to overfitting. SAM exhibits remarkable resilience to noisy labels. To use SAM add the cli argument ```--sam-rho <value-of-hyperparameter-rho>```. For example, ```--sam-rho 0.1``` means the rho hyperparameter is set to 0.1.
 
+
+3. [Negative Label Smoothening](https://arxiv.org/pdf/2106.04149.pdf)(NLS) - is a variant of Label Smoothing (LS) that uses a negative weight to combine the hard and soft labels. It is designed to improve the robustness of the model when learning with noisy labels, especially in high noise regimes. To use NLS, you can add the cli argument ```--gls-smoothing <value-of-hyperparameter-smoothing-rate>```. For example, ```--gls-smoothing -0.2``` means using NLS with a weight of -0.2 for the soft labels.
 
 
 ### Stay tuned for future updates
 The following methods are planned to be implemented:
 
 - [Sample Sieve](https://openreview.net/forum?id=2VXyy9mIyU3)
-- [Label Smoothening](https://arxiv.org/pdf/2106.04149.pdf)
 - [Early stopping](https://arxiv.org/abs/1903.11680)
 - [Curvature Penalty](https://openreview.net/pdf?id=2B2xIJ299rx) 
 - [MentorNet](https://arxiv.org/pdf/1712.05055.pdf)
