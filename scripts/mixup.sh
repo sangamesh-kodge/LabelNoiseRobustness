@@ -1,19 +1,21 @@
-for seed in 32087 #35416 12484
+### Requires defining DEVICE ARCH EPOCH DATASET DATA_PATH SAVE_PATH  
+# eg. DEVICE=0 ARCH=InceptionResNetV2 EPOCH=200 DATASET=Mini-WebVision DATA_PATH=<path-to-dataset> SAVE_PATH=<path-to-save-model> sh ./scripts/mixup.sh
+for seed in 32087 35416 12484
 do 
-    for arch in resnet18
+    for arch in $ARCH
     do
         for lr in 1e-2
         do 
-            for wd in 1e-5
+            for wd in 4e-5
             do 
-                for bsz in 128
+                for bsz in 256
                 do 
-                    for ma in 1 2 4 8
+                    for ma in 8
                     do
                         # MixUp
-                        CUDA_VISIBLE_DEVICES=$DEVICE python ./train.py --dataset Mini-WebVision --data-path /local/scratch/a/skodge/data/Mini-WebVision \
-                        --arch $arch --seed $seed --model-path /home/nano01/a/skodge/label_robustness --entity-name nrl \
-                        --batch-size $bsz --weight-decay $wd --lr $lr --mixup-alpha $ma
+                        CUDA_VISIBLE_DEVICES=$DEVICE python3 ./train.py --dataset $DATASET --data-path $DATA_PATH \
+                        --arch $arch --seed $seed --model-path $SAVE_PATH --project-name final  \
+                        --batch-size $bsz --weight-decay $wd --lr $lr --mixup-alpha $ma --epoch $EPOCH
                     done
                 done
             done

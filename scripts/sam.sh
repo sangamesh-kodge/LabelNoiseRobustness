@@ -1,19 +1,21 @@
-for seed in 32087 #35416 12484
+### Requires defining DEVICE ARCH EPOCH DATASET DATA_PATH SAVE_PATH  
+# eg. DEVICE=0 ARCH=InceptionResNetV2 EPOCH=200 DATASET=Mini-WebVision DATA_PATH=<path-to-dataset> SAVE_PATH=<path-to-save-model> sh ./scripts/sam.sh
+for seed in 32087 35416 12484
 do 
-    for arch in resnet18
+    for arch in $ARCH
     do
         for lr in 1e-2
         do 
-            for wd in 1e-5
+            for wd in 4e-5
             do 
-                for bsz in 128
-                do 
-                    for sr in 0.1 0.05
+                for bsz in 256
+                do
+                    for sr in 0.1
                     do
                         # SAM
-                        CUDA_VISIBLE_DEVICES=$DEVICE python ./train.py --dataset Mini-WebVision --data-path /local/scratch/a/skodge/data/Mini-WebVision \
-                        --arch $arch --seed $seed --model-path /home/nano01/a/skodge/label_robustness --entity-name nrl \
-                        --batch-size $bsz --weight-decay $wd --lr $lr  --use-rho $sr
+                        CUDA_VISIBLE_DEVICES=$DEVICE python3 ./train.py --dataset $DATASET --data-path $DATA_PATH \
+                        --arch $arch --seed $seed --model-path $SAVE_PATH --project-name final \
+                        --batch-size $bsz --weight-decay $wd --lr $lr  --sam-rho $sr --epoch $EPOCH
                     done
                 done
             done
