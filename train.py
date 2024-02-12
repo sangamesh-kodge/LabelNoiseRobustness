@@ -10,7 +10,7 @@ import wandb
 from sklearn.metrics import confusion_matrix
 import numpy as np
 import os
-from utils import get_dataset, get_model, get_mislabeled_dataset, SAM
+from utils import get_dataset, get_model, get_mislabeled_dataset, SAM, loss_gls
 import random 
 import copy
 from torchvision.transforms import v2
@@ -25,25 +25,32 @@ def train(args, model, device, train_loader, optimizer, epoch):
         optimizer.zero_grad()
         if args.sam_rho is not None:
             # first forward-backward pass
-            loss = F.cross_entropy( model(data), target) 
+            output = model(data)
+            loss = F.cross_entropy( output, target) 
             loss.backward()
-            optimizer.first_step(zero_grad=True)
-            
+            optimizer.first_step(zero_grad=True)            
             # second forward-backward pass
             F.cross_entropy(model(data), target).backward()  # make sure to do a full forward pass
             optimizer.second_step(zero_grad=True)
+        elif args.gls_smoothing is not None:
+            output = model(data)
+            loss = loss_gls(output, target, args.gls_smoothing)
+            loss.backward()
+            optimizer.step() 
+            ### Update to logging cross-entropy loss
+            loss = F.cross_entropy(output, target)
         else:
             output = model(data)
             loss = F.cross_entropy(output, target)
             loss.backward()
             optimizer.step()
-
+        
         train_loss += loss.detach().item()
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item()))
-            wandb.log({"Train Set/train_loss":loss.item() })
+                100. * batch_idx / len(train_loader), loss.detach().item()))
+            wandb.log({"Train Set/train_loss":loss.detach().item() })
             if args.dry_run:
                 break
     return train_loss
@@ -130,14 +137,16 @@ def main():
                         help='') 
     parser.add_argument('--clean-partition', action='store_true', default=False,
                         help='For Saving the current Model') 
-    parser.add_argument('--sam-rho',type=float, default=None, 
-                        help='to do SAM') 
-    parser.add_argument('--mixup-alpha',type=float, default=None, 
-                        help='to do MixUp') 
     parser.add_argument('--do-not-save', action='store_true', default=False,
                         help='For Saving the current Model') 
     parser.add_argument('--use_valset', action='store_true', default=False,
                         help='For Saving the current Model') 
+    parser.add_argument('--sam-rho',type=float, default=None, 
+                        help='to do SAM') 
+    parser.add_argument('--mixup-alpha',type=float, default=None, 
+                        help='to do MixUp') 
+    parser.add_argument('--gls-smoothing',type=float, default=None, 
+                        help='Use GLS with given smoothening rate') 
     args = parser.parse_args()
     args.train_transform = not args.no_train_transform
     if args.seed == None:
@@ -167,6 +176,8 @@ def main():
     dataset1, dataset2 = get_dataset(args)
     # Check trained model!
     model = get_model(args, device)
+    if torch.cuda.device_count() > 1:
+        model = torch.nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))
 
     dataset_corrupt, corrupt_samples, (index_list, old_targets, updated_targets) = get_mislabeled_dataset(copy.deepcopy(dataset1), args.percentage_mislabeled, args.num_classes, args.clean_partition, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}")
     if args.use_valset:
@@ -200,6 +211,7 @@ def main():
     else:
         def collate_fn(batch):
             return default_collate(batch)
+        
     train_loader_corrupt = torch.utils.data.DataLoader(trainset_corrupt,**train_kwargs, collate_fn=collate_fn)
     if args.use_valset:
         val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)
@@ -217,10 +229,16 @@ def main():
         run_name = f"{run_name}_sam-rho{args.sam_rho}"
     else:
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
+
     if args.mixup_alpha is not None:
         group_name = f"{group_name}-MixUp"
         model_name = f"{model_name}_mixup"
         run_name = f"{run_name}_mixup-alpha{args.mixup_alpha}"
+
+    if args.gls_smoothing is not None:
+        group_name = f"{group_name}-GLS"
+        model_name = f"{model_name}_gls"
+        run_name = f"{run_name}_gls-smoothing{args.gls_smoothing}"
 
     if args.clean_partition:
         model_name = f"{model_name}_CleanData{1-args.percentage_mislabeled}_seed{args.seed}"
@@ -258,9 +276,9 @@ def main():
             else:
                 scheduler.step()
     if not args.do_not_save:
-        if args.clean_partition:
-            torch.save(model.state_dict(), f"{args.model_path}/{model_name}.pt")
-        else:
+        try:
+            torch.save(model.module.state_dict(), f"{args.model_path}/{model_name}.pt")
+        except:
             torch.save(model.state_dict(), f"{args.model_path}/{model_name}.pt")
     wandb.finish()
 

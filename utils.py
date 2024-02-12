@@ -310,7 +310,21 @@ class SAM(torch.optim.Optimizer):
         super().load_state_dict(state_dict)
         self.base_optimizer.param_groups = self.param_groups
 
-
+# GLS loss function taken from https://github.com/UCSC-REAL/negative-label-smoothing
+def loss_gls(logits, labels, smooth_rate=0.1):
+    # logits: model prediction logits before the soft-max, with size [batch_size, classes]
+    # labels: the (noisy) labels for evaluation, with size [batch_size]
+    # smooth_rate: could go either positive or negative, 
+    # smooth_rate candidates we adopted in the paper: [0.8, 0.6, 0.4, 0.2, 0.0, -0.2, -0.4, -0.6, -0.8, -1.0, -2.0, -4.0, -6.0, -8.0].
+    confidence = 1. - smooth_rate
+    logprobs = F.log_softmax(logits, dim=-1)
+    nll_loss = -logprobs.gather(dim=-1, index=labels.unsqueeze(1))
+    nll_loss = nll_loss.squeeze(1)
+    smooth_loss = -logprobs.mean(dim=-1)
+    loss = confidence * nll_loss + smooth_rate * smooth_loss
+    loss_numpy = loss.data.cpu().numpy()
+    num_batch = len(loss_numpy)
+    return torch.sum(loss)/num_batch
 
 def MentorMixLoss(args,MentorNet, StudentNet, x_i, y_i,v_true, loss_p_prev, loss_p_second_prev, epoch):
     '''
