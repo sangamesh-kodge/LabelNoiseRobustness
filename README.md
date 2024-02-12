@@ -70,7 +70,7 @@ The following methods are planned to be implemented:
 ### Real-world noisy dataset
 The real-world noisy dataset used in this project is the WebVision dataset, designed to facilitate research on learning visual representation from noisy web data. 
 
-1. [WebVision 1.0](https://data.vision.ee.ethz.ch/cvl/webvision/dataset2017.html)- The WebVision dataset is designed to facilitate the research on learning visual representation from noisy web data. We use the Google partition of WebVision dataset which has 974302 train images. The dataset is extracted using code from [WebVision1.0-Google](https://github.com/sangamesh-kodge/WebVision1.0-Google).
+1. [WebVision 1.0](https://data.vision.ee.ethz.ch/cvl/webvision/dataset2017.html)- The WebVision dataset is designed to facilitate the research on learning visual representation from noisy web data. The dataset is extracted using code from [WebVision1.0](https://github.com/sangamesh-kodge/WebVision1.0).
 
 2. [Mini-WebVision](https://arxiv.org/abs/1911.09781)- is a subset of the first 50 classes of Goole partition of WebVision 1.0 dataset (contains about 61234 training images). We use [Mini-WebVision](https://github.com/sangamesh-kodge/Mini-WebVision) code to extract dataset.
 
