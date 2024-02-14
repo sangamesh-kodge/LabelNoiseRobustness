@@ -149,7 +149,7 @@ def main():
     parser.add_argument('--gls-smoothing',type=float, default=None, 
                         help='Use GLS with given smoothening rate') 
     parser.add_argument('--estop-delta',type=float, default=None, 
-                        help='change in loss to theshold for 3 checks of early stopping') 
+                        help='change in loss to theshold for 3 checks of early stopping')     
     args = parser.parse_args()
     args.train_transform = not args.no_train_transform
     if args.seed == None:
@@ -182,7 +182,7 @@ def main():
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))
 
-    # Set the training hyperparameters.
+    # Set the run names.
     group_name = f"{args.group_name}-{args.arch}"
     model_name = f"{args.dataset}_{args.arch}"
     if args.clean_partition:
@@ -197,9 +197,6 @@ def main():
         model_name = f"{model_name}_sam{args.sam_rho}"
         run_name = f"{run_name}_sam-rho{args.sam_rho}"
         base_optimizer = torch.optim.SGD
-        optimizer = SAM(model.parameters(), base_optimizer, rho=args.sam_rho, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
-    else:
-        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
 
     if args.mixup_alpha is not None:
         group_name = f"{group_name}-MixUp{args.mixup_alpha}"
@@ -218,7 +215,8 @@ def main():
         run_name = f"{run_name}_early-stopping{args.estop_delta}"
         args.use_valset = True
         early_stopper = EarlyStopper(patience=3, min_delta=args.estop_delta)
-        
+
+    # Creating Synthetic Corrupt dataset if required 
     dataset_corrupt, corrupt_samples, (index_list, old_targets, updated_targets) = get_mislabeled_dataset(copy.deepcopy(dataset1), args.percentage_mislabeled, args.num_classes, args.clean_partition, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}")
     if args.use_valset:
         ### split corrupt data into train and val.
@@ -244,6 +242,7 @@ def main():
         trainset_corrupt = dataset_corrupt
         valset_corrupt = None
 
+    # Does mixup if mixup_alpha set.
     if args.mixup_alpha is not None:
         mixup_function = v2.MixUp(alpha=args.mixup_alpha, num_classes=args.num_classes) 
         def collate_fn(batch):
@@ -251,23 +250,25 @@ def main():
     else:
         def collate_fn(batch):
             return default_collate(batch)
-    
+    # Creates dataloader
     train_loader_corrupt = torch.utils.data.DataLoader(trainset_corrupt,**train_kwargs, collate_fn=collate_fn)
     if args.use_valset:
         val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)
     
-    test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
+    test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)   
 
-
-    
-
+    # Create optimizer and scheduler.
+    if args.sam_rho is not None:
+        optimizer = SAM(model.parameters(), base_optimizer, rho=args.sam_rho, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
+    else:
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=args.gamma)
     
+    # Initializes the save path and checks if the file exits. Terminates to avoid overwriting.
     save_folder_path = os.path.join(f"{args.model_path}",f"{args.dataset}_{args.project_name}",f"{group_name}")
     if not os.path.exists(save_folder_path):
-        os.makedirs(save_folder_path)
-    
-    if os.path.exists( os.path.join(save_folder_path, f"{model_name}.pt")):
+        os.makedirs(save_folder_path)    
+    if os.path.exists( os.path.join(save_folder_path, f"{model_name}_final.pt")):
         if not args.do_not_save:
             raise FileExistsError     
     
@@ -302,21 +303,25 @@ def main():
                 scheduler.step(train_loss, epoch=(epoch+1))
             else:
                 scheduler.step()
+
+    # Log the best/final model. 
     test(best_model, device, test_loader, args.num_classes, set_name="Best Model-Test Set")
     test(best_model, device, train_loader_corrupt, args.num_classes, set_name="Best Model-Train Set")
     if args.use_valset:
         test(best_model, device, val_loader_corrupt, args.num_classes, set_name="Best Model-Val Set")
+
+    # Save the best and final model.
     if not args.do_not_save:
+
+        try:
+            torch.save(model.module.state_dict(), os.path.join(save_folder_path, f"{model_name}_final.pt") )
+        except:
+            torch.save(model.state_dict(), os.path.join(save_folder_path, f"{model_name}_final.pt") )
         if args.use_valset:
             try:
                 torch.save(best_model.module.state_dict(), os.path.join(save_folder_path, f"{model_name}_best.pt") )
             except:
                 torch.save(best_model.state_dict(), os.path.join(save_folder_path, f"{model_name}_best.pt") )
-        else:
-            try:
-                torch.save(model.module.state_dict(), os.path.join(save_folder_path, f"{model_name}_final.pt") )
-            except:
-                torch.save(model.state_dict(), os.path.join(save_folder_path, f"{model_name}_final.pt") )
 
     wandb.finish()
 
