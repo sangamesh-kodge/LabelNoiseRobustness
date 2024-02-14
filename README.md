@@ -61,10 +61,10 @@ pip install -r requirements.txt
 ### Stay tuned for future updates
 The following methods are planned to be implemented:
 
-- [Sample Sieve](https://openreview.net/forum?id=2VXyy9mIyU3)
-- [Curvature Penalty](https://openreview.net/pdf?id=2B2xIJ299rx) 
-- [MentorNet](https://arxiv.org/pdf/1712.05055.pdf)
 - [MentorMix](https://arxiv.org/pdf/1911.09781.pdf) 
+- [Curvature Penalty](https://openreview.net/pdf?id=2B2xIJ299rx) 
+- [Sample Sieve](https://openreview.net/forum?id=2VXyy9mIyU3)
+- [MentorNet](https://arxiv.org/pdf/1712.05055.pdf)
 
 
 ## Supported Datasets
