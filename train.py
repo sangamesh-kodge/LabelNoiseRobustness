@@ -84,12 +84,10 @@ def test(model, device, test_loader, num_classes=10, set_name = "Val Set"):
     return test_loss
 
 def main():
-    # Training settings
+    # Vanilla Training settings
     parser = argparse.ArgumentParser(description='PyTorch cifar10 Example')
     parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                         help='input batch size for training (default: 64)')
-    parser.add_argument('--dataset', type=str, default="cifar10",
-                        help='')
     parser.add_argument('--test-batch-size', type=int, default=512, metavar='N',
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=350, metavar='N',
@@ -101,7 +99,7 @@ def main():
     parser.add_argument('--weight-decay', type=float, default=5e-4, metavar='LR',
                         help='')
     parser.add_argument('--gamma', type=float, default=0.5, metavar='M',
-                        help='Learning rate step gamma (default: 0.5) after 50 epochs')
+                        help='Learning rate step gamma (default: 0.5) lr on plateau ')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
     parser.add_argument('--no-mps', action='store_true', default=False,
@@ -114,42 +112,48 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--no-train-transform', action='store_false', default=False,
                         help='For Saving the current Model')
+    # Network Arguments
     parser.add_argument('--arch', type=str, default='vgg11_bn', 
-                        help='') 
+                        help='')    
+    parser.add_argument('--model-path', type=str, default='./', 
+                        help='path to save the model')
+    parser.add_argument('--load-loc', type=str, default=None,
+                        help='path to laod the model')      
+    parser.add_argument('--do-not-save', action='store_true', default=False,
+                        help='For Saving the current Model') 
+    # Dataset Arguments 
+    parser.add_argument('--dataset', type=str, default="cifar10",
+                        help='')
     parser.add_argument('--data-path', type=str, default='./', 
                         help='')
-    parser.add_argument('--model-path', type=str, default='./', 
-                        help='')
-    
-    ### wandb parameters
-    parser.add_argument('--project-name', type=str, default='Compare', 
+    parser.add_argument('--use-valset', action='store_true', default=False,
+                        help='For Saving the current Model')  
+    # Label noise parameters for synthetic noise injection
+    parser.add_argument('--percentage-mislabeled', type=float, default=0.0, 
+                        help='') 
+    parser.add_argument('--clean-partition', action='store_true', default=False,
+                        help='For Saving the current Model')    
+    # wandb Arguments
+    parser.add_argument('--project-name', type=str, default='final', 
                         help='')
     parser.add_argument('--group-name', type=str, default='train', 
                         help='')  
     parser.add_argument('--entity-name', type=str, default=None, 
                         help='')  
-    
-    ### Unlearning parameters 
-    parser.add_argument('--load-loc', type=str, default=None,
-                        help='')    
-    parser.add_argument('--save-loc', type=str, default=None,
-                        help='')    
-    parser.add_argument('--percentage-mislabeled', type=float, default=0.0, 
-                        help='') 
-    parser.add_argument('--clean-partition', action='store_true', default=False,
-                        help='For Saving the current Model') 
-    parser.add_argument('--do-not-save', action='store_true', default=False,
-                        help='For Saving the current Model') 
-    parser.add_argument('--use-valset', action='store_true', default=False,
-                        help='For Saving the current Model') 
+    # SAM Arguments
     parser.add_argument('--sam-rho',type=float, default=None, 
                         help='to do SAM') 
+    # MixUp Arguments
     parser.add_argument('--mixup-alpha',type=float, default=None, 
                         help='to do MixUp') 
+    # GLS Arguments
     parser.add_argument('--gls-smoothing',type=float, default=None, 
                         help='Use GLS with given smoothening rate') 
+    # Early Stopping Arguments
     parser.add_argument('--estop-delta',type=float, default=None, 
-                        help='change in loss to theshold for 3 checks of early stopping')     
+                        help='change in loss to theshold for 3 checks of early stopping')   
+    
+    
     args = parser.parse_args()
     args.train_transform = not args.no_train_transform
     if args.seed == None:
@@ -195,27 +199,20 @@ def main():
     if args.sam_rho is not None:
         group_name = f"{group_name}-SAM{args.sam_rho}"
         model_name = f"{model_name}_sam{args.sam_rho}"
-        run_name = f"{run_name}_sam-rho{args.sam_rho}"
-        base_optimizer = torch.optim.SGD
-
+        run_name = f"{run_name}_sam-rho{args.sam_rho}"        
     if args.mixup_alpha is not None:
         group_name = f"{group_name}-MixUp{args.mixup_alpha}"
         model_name = f"{model_name}_mixup{args.mixup_alpha}"
         run_name = f"{run_name}_mixup-alpha{args.mixup_alpha}"
-
     if args.gls_smoothing is not None:
         group_name = f"{group_name}-GLS{args.gls_smoothing}"
         model_name = f"{model_name}_gls{args.gls_smoothing}"
         run_name = f"{run_name}_gls-smoothing{args.gls_smoothing}"
-    
-
     if args.estop_delta is not None:
         group_name = f"{group_name}-EStop{args.estop_delta}"
         model_name = f"{model_name}_estop{args.estop_delta}"
         run_name = f"{run_name}_early-stopping{args.estop_delta}"
         args.use_valset = True
-        early_stopper = EarlyStopper(patience=3, min_delta=args.estop_delta)
-
     # Creating Synthetic Corrupt dataset if required 
     dataset_corrupt, corrupt_samples, (index_list, old_targets, updated_targets) = get_mislabeled_dataset(copy.deepcopy(dataset1), args.percentage_mislabeled, args.num_classes, args.clean_partition, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}")
     if args.use_valset:
@@ -241,7 +238,6 @@ def main():
     else:
         trainset_corrupt = dataset_corrupt
         valset_corrupt = None
-
     # Does mixup if mixup_alpha set.
     if args.mixup_alpha is not None:
         mixup_function = v2.MixUp(alpha=args.mixup_alpha, num_classes=args.num_classes) 
@@ -256,13 +252,17 @@ def main():
         val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)
     
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)   
-
     # Create optimizer and scheduler.
     if args.sam_rho is not None:
+        base_optimizer = torch.optim.SGD
         optimizer = SAM(model.parameters(), base_optimizer, rho=args.sam_rho, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
     else:
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=args.gamma)
+    # Initialize the EarlyStopper
+    if args.estop_delta is not None:
+        early_stopper = EarlyStopper(patience=5, min_delta=args.estop_delta)
+
     
     # Initializes the save path and checks if the file exits. Terminates to avoid overwriting.
     save_folder_path = os.path.join(f"{args.model_path}",f"{args.dataset}_{args.project_name}",f"{group_name}")
