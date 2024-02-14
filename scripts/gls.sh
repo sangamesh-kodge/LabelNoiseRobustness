@@ -10,7 +10,7 @@ do
             do 
                 for bsz in 256
                 do 
-                    for gs in -0.4
+                    for gs in 0.2
                     do
                         # MixUp
                         CUDA_VISIBLE_DEVICES=$DEVICE python3 ./train.py --dataset $DATASET --data-path $DATA_PATH \
