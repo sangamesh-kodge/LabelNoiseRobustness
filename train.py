@@ -10,20 +10,119 @@ import wandb
 from sklearn.metrics import confusion_matrix
 import numpy as np
 import os
-from utils import get_dataset, get_model, get_mislabeled_dataset, SAM, loss_gls, EarlyStopper
+from utils import get_dataset, get_model, get_mislabeled_dataset, SAM, loss_gls, EarlyStopper, IndexedDataset
+from models.mentornet import MentorNet
 import random 
 import copy
 from torchvision.transforms import v2
 from torch.utils.data import default_collate
+import torch.distributions.categorical as cat
+import torch.distributions.dirichlet as diri
+
+def train_mentor(args, model, device, train_loader, optimizer, epoch, mnet, mnet_optimizer,  loss_p_prev, loss_p_second_prev):
+    model.train()
+    mnet.train()
+    train_loss= 0
+    total_model_loss=0
+    total_mnet_loss = 0
+    # taken from https://github.com/LJY-HY/MentorMix_pytorch/blob/master/train_MentorNet.py
+    # MentorNet/MentorMix Training
+    for batch_idx, (x_i, y_i, v_i, index) in enumerate(train_loader):
+        x_i, y_i, v_i = x_i.to(device), y_i.to(device), v_i.to(device)
+        optimizer.zero_grad()
+        mnet_optimizer.zero_grad()
+        bsz = x_i.shape[0]
+        with torch.no_grad():
+            output = model(x_i)
+            loss = F.cross_entropy(output, y_i, reduction='none')
+            loss_p = args.mnet_ema*loss_p_prev + (1-args.mnet_ema)*sorted(loss)[int(bsz*args.mnet_gamma_p-1)]
+            loss_diff = loss-loss_p
+            # Assumes Data-Driven implementation for MentorNet-type
+            v_true = (loss_diff<0).long().to(device)   # closed-form optimal solution
+            if epoch < int(args.epochs*0.2):
+                v_true = torch.bernoulli(torch.ones_like(loss_diff)/2).to(device)
+     
+        '''
+        Train MentorNet.
+        calculate the gradient of the MentorNet.
+        '''
+        v = mnet(v_i, args.epochs, epoch-1,loss,loss_diff) # This assumes epoch goes from 0 - max-1.
+        mnet_loss = F.binary_cross_entropy(v,v_true.type(torch.FloatTensor).to(device))
+        total_mnet_loss+= mnet_loss.detach().item()
+        mnet_loss.backward()
+        mnet_optimizer.step()
+
+        for count, idx in enumerate(index):
+            train_loader.dataset.v_label[idx] = v_true[count].long()
+              
+        '''
+        Train StudentNet
+        calculate the gradient of the StudentNet
+            '''
+        if args.mmix_alpha is not None:
+            P_v = cat.Categorical(F.softmax(v_true,dim=0))           
+            indices_j = P_v.sample(y_i.shape)                   
+            
+            # Prepare Mixup
+            x_j = x_i[indices_j]
+            y_j = y_i[indices_j]
+            
+            # MIXUP
+            Beta = diri.Dirichlet(torch.tensor([args.mmix_alpha for _ in range(2)]))
+            lambdas = Beta.sample(y_i.shape).to(device)
+            lambdas_max = lambdas.max(dim=1)[0]                 
+            lambdas = v_true*lambdas_max + (1-v_true)*(1-lambdas_max)     
+            x_tilde = x_i * lambdas.view(lambdas.size(0),1,1,1) + x_j * (1-lambdas).view(lambdas.size(0),1,1,1)
+
+
+            outputs_tilde = model(x_tilde)
+    
+            # Second Reweight
+            with torch.no_grad():
+                loss = lambdas*F.cross_entropy(outputs_tilde,y_i, reduction='none') + (1-lambdas)*F.cross_entropy(outputs_tilde,y_j, reduction='none')
+                loss_p_second = args.mnet_ema*loss_p_second_prev + (1-args.mnet_ema)*sorted(loss)[int(bsz*args.mnet_gamma_p)]
+                loss_diff = loss-loss_p_second
+                v_tilde = (loss_diff<0).long().to(device)   # closed-form optimal solution
+                if epoch < int(args.epochs*0.2):
+                    v_tilde = torch.bernoulli(torch.ones_like(loss_diff)/2).to(device)
+            loss = lambdas*F.cross_entropy(outputs_tilde,y_i, reduction='none') + (1-lambdas)*F.cross_entropy(outputs_tilde,y_j, reduction='none')
+            loss = loss * v_tilde
+            loss = loss.mean()
+            total_model_loss+= loss.detach().item()
+            loss.backward()
+            optimizer.step()
+        else:  
+            v = v.detach()
+            output = model(x_i)
+            loss = F.cross_entropy(output,y_i,reduction='none')
+            loss = loss*v
+            loss = loss.mean()
+            total_model_loss+= loss.detach().item()
+            loss.backward()
+            optimizer.step()
+            loss_p_second = None
+                    
+        
+        ### Update to logging cross-entropy loss
+        loss = F.cross_entropy( output, y_i)   
+        train_loss += loss.detach().item()
+        if batch_idx % args.log_interval == 0:
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                epoch, batch_idx * len(x_i), len(train_loader.dataset),
+                100. * batch_idx / len(train_loader), loss.detach().item()))
+            wandb.log({"Train Set/train_loss":loss.detach().item() })
+            if args.dry_run:
+                break
+    return train_loss, total_model_loss, total_mnet_loss, loss_p, loss_p_second
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
     train_loss= 0
-
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
+        optimizer.zero_grad()            
         if args.sam_rho is not None:
+            # SAM Training
             # first forward-backward pass
             output = model(data)
             loss = F.cross_entropy( output, target) 
@@ -33,18 +132,21 @@ def train(args, model, device, train_loader, optimizer, epoch):
             F.cross_entropy(model(data), target).backward()  # make sure to do a full forward pass
             optimizer.second_step(zero_grad=True)
         elif args.gls_smoothing is not None:
+            # Label Smoothening training
             output = model(data)
             loss = loss_gls(output, target, args.gls_smoothing)
             loss.backward()
-            optimizer.step() 
-            ### Update to logging cross-entropy loss
-            loss = F.cross_entropy(output, target)
+            optimizer.step()          
         else:
+            # Mixup/Vanilla Training
             output = model(data)
             loss = F.cross_entropy(output, target)
             loss.backward()
             optimizer.step()
         
+        
+        ### Update to logging cross-entropy loss
+        loss = F.cross_entropy( output, target)   
         train_loss += loss.detach().item()
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
@@ -151,7 +253,12 @@ def main():
                         help='Use GLS with given smoothening rate') 
     # Early Stopping Arguments
     parser.add_argument('--estop-delta',type=float, default=None, 
-                        help='change in loss to theshold for 3 checks of early stopping')   
+                        help='change in loss to theshold for 5 checks of early stopping')   
+    # MentorNet Arguments  
+    parser.add_argument('--mnet-ema', default = 0.05, type=float) # Figure out what this is
+    parser.add_argument('--mnet-gamma-p', default = None, type=float, help= "Set to run MentorNet. Suggested value 0.7")
+    # MentorMix Arguments
+    parser.add_argument('--mmix-alpha', default = None, type=float, help= "Set to run MentorMix. Suggested value 0.4")
     
     
     args = parser.parse_args()
@@ -213,6 +320,15 @@ def main():
         model_name = f"{model_name}_estop{args.estop_delta}"
         run_name = f"{run_name}_early-stopping{args.estop_delta}"
         args.use_valset = True
+    if args.mnet_gamma_p is not None:
+        if args.mmix_alpha is not None:
+            group_name = f"{group_name}-MMix{args.mnet_gamma_p}_{args.mmix_alpha}"
+            model_name = f"{model_name}-mmix{args.mnet_gamma_p}_{args.mmix_alpha}"
+            run_name = f"{run_name}_MentorMix{args.mnet_gamma_p}_{args.mmix_alpha}"
+        else:
+            group_name = f"{group_name}-MNet{args.mnet_gamma_p}"
+            model_name = f"{model_name}-mnet{args.mnet_gamma_p}"
+            run_name = f"{run_name}_MentorNet{args.mnet_gamma_p}"
     # Creating Synthetic Corrupt dataset if required 
     dataset_corrupt, corrupt_samples, (index_list, old_targets, updated_targets) = get_mislabeled_dataset(copy.deepcopy(dataset1), args.percentage_mislabeled, args.num_classes, args.clean_partition, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}")
     if args.use_valset:
@@ -259,6 +375,16 @@ def main():
     else:
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=args.gamma)
+    # Setup MentorNet model and optimizer.
+    if args.mnet_gamma_p is not None:
+        # Assumes "MentorNet" network    
+        indexed_trainset_corrupt = IndexedDataset(trainset_corrupt)      
+        indexed_train_loader_corrupt = torch.utils.data.DataLoader(indexed_trainset_corrupt,**train_kwargs, collate_fn=collate_fn)
+        mnet = MentorNet("MentorNet").to(device)
+        mnet_optimizer = optim.SGD(mnet.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
+        mnet_scheduler = optim.lr_scheduler.ReduceLROnPlateau(mnet_optimizer, 'max', factor=args.gamma)
+        loss_p_prev = 0
+        loss_p_second_prev = 0
     # Initialize the EarlyStopper
     if args.estop_delta is not None:
         early_stopper = EarlyStopper(patience=5, min_delta=args.estop_delta)
@@ -286,42 +412,53 @@ def main():
     min_validation_loss = np.inf
     best_model = None
     for epoch in range(1, args.epochs + 1):
-        train_loss = train(args, model, device, train_loader_corrupt, optimizer, epoch)
+        if args.mnet_gamma_p is not None:
+            train_loss, total_model_loss, total_mnet_loss, loss_p_prev, loss_p_second_prev = train_mentor(args, model, device, indexed_train_loader_corrupt, optimizer, epoch, mnet, mnet_optimizer,  loss_p_prev, loss_p_second_prev)
+            if mnet_scheduler:
+                if isinstance(mnet_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    mnet_scheduler.step(total_mnet_loss, epoch=(epoch+1))
+                else:
+                    mnet_scheduler.step()
+            if scheduler:
+                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    scheduler.step(total_model_loss, epoch=(epoch+1))
+                else:
+                    scheduler.step()
+        else:
+            train_loss = train(args, model, device, train_loader_corrupt, optimizer, epoch)        
+            if scheduler:
+                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    scheduler.step(train_loss, epoch=(epoch+1))
+                else:
+                    scheduler.step()
         if args.use_valset:
             validation_loss=test(model, device, val_loader_corrupt, args.num_classes)
             if validation_loss <= min_validation_loss:
                 best_model = copy.deepcopy(model) 
         else:
             best_model = copy.deepcopy(model) 
-
+        test(model, device, test_loader, args.num_classes, set_name="Test Set")
         if args.estop_delta is not None:
             if early_stopper.early_stop(validation_loss):             
                 break
-        test(model, device, test_loader, args.num_classes, set_name="Test Set")
-        if scheduler:
-            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                scheduler.step(train_loss, epoch=(epoch+1))
-            else:
-                scheduler.step()
-
-    # Log the best/final model. 
-    test(best_model, device, test_loader, args.num_classes, set_name="Best Model-Test Set")
-    test(best_model, device, train_loader_corrupt, args.num_classes, set_name="Best Model-Train Set")
-    if args.use_valset:
-        test(best_model, device, val_loader_corrupt, args.num_classes, set_name="Best Model-Val Set")
-
-    # Save the best and final model.
-    if not args.do_not_save:
-
-        try:
-            torch.save(model.module.state_dict(), os.path.join(save_folder_path, f"{model_name}_final.pt") )
-        except:
-            torch.save(model.state_dict(), os.path.join(save_folder_path, f"{model_name}_final.pt") )
+    if not args.dry_run:
+        # Log the best/final model. 
+        test(best_model, device, test_loader, args.num_classes, set_name="Best Model-Test Set")
+        test(best_model, device, train_loader_corrupt, args.num_classes, set_name="Best Model-Train Set")
         if args.use_valset:
+            test(best_model, device, val_loader_corrupt, args.num_classes, set_name="Best Model-Val Set")
+
+        # Save the best and final model.
+        if not args.do_not_save:
             try:
-                torch.save(best_model.module.state_dict(), os.path.join(save_folder_path, f"{model_name}_best.pt") )
+                torch.save(model.module.state_dict(), os.path.join(save_folder_path, f"{model_name}_final.pt") )
             except:
-                torch.save(best_model.state_dict(), os.path.join(save_folder_path, f"{model_name}_best.pt") )
+                torch.save(model.state_dict(), os.path.join(save_folder_path, f"{model_name}_final.pt") )
+            if args.use_valset:
+                try:
+                    torch.save(best_model.module.state_dict(), os.path.join(save_folder_path, f"{model_name}_best.pt") )
+                except:
+                    torch.save(best_model.state_dict(), os.path.join(save_folder_path, f"{model_name}_best.pt") )
 
     wandb.finish()
 
