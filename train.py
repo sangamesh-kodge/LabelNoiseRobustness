@@ -144,7 +144,7 @@ def main():
     parser.add_argument('--model-path', type=str, default='./', 
                         help='path to save the model')
     parser.add_argument('--load-loc', type=str, default=None,
-                        help='path to laod the model')      
+                        help='path to load the model')      
     parser.add_argument('--do-not-save', action='store_true', default=False,
                         help='For Saving the current Model') 
     # Dataset Arguments 
@@ -152,13 +152,13 @@ def main():
                         help='')
     parser.add_argument('--data-path', type=str, default='./', 
                         help='')
-    parser.add_argument('--use-valset', action='store_true', default=False,
-                        help='For Saving the current Model')  
+    parser.add_argument('--use-valset', type=float, default=None,
+                        help='')  
     # Label noise parameters for synthetic noise injection
     parser.add_argument('--percentage-mislabeled', type=float, default=0.0, 
                         help='') 
     parser.add_argument('--clean-partition', action='store_true', default=False,
-                        help='For Saving the current Model')    
+                        help='')    
     # wandb Arguments
     parser.add_argument('--project-name', type=str, default='final', 
                         help='')
@@ -252,10 +252,10 @@ def main():
 
     # Creating Synthetic Corrupt dataset if required 
     dataset_corrupt, corrupt_samples, (index_list, old_targets, updated_targets) = get_mislabeled_dataset(copy.deepcopy(dataset1), args.percentage_mislabeled, args.num_classes, args.clean_partition, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}")
-    if args.use_valset:
+    if args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
         ### split corrupt data into train and val.
         num_of_data_points = len(dataset_corrupt)
-        num_of_val_samples = int(0.1 * num_of_data_points)
+        num_of_val_samples = int(args.use_valset  * num_of_data_points)
         r=np.arange(num_of_data_points)
         np.random.shuffle(r)
         val_index = r[:num_of_val_samples].tolist()
@@ -280,7 +280,7 @@ def main():
             return default_collate(batch)
     # Creates dataloader
     train_loader_corrupt = torch.utils.data.DataLoader(trainset_corrupt,**train_kwargs, collate_fn=collate_fn)
-    if args.use_valset:
+    if args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
         val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)
     
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)   
@@ -338,7 +338,7 @@ def main():
                 scheduler.step(train_loss, epoch=(epoch+1))
             else:
                 scheduler.step()
-        if args.use_valset:
+        if args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
             validation_loss=test(model, device, val_loader_corrupt, args.num_classes)
             if validation_loss <= min_validation_loss:
                 best_model = copy.deepcopy(model) 
@@ -355,7 +355,7 @@ def main():
                 torch.save(model.module.state_dict(), os.path.join(save_folder_path, f"{args.model_name}_final.pt") )
             except:
                 torch.save(model.state_dict(), os.path.join(save_folder_path, f"{args.model_name}_final.pt") )
-            if args.use_valset:
+            if args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
                 try:
                     torch.save(best_model.module.state_dict(), os.path.join(save_folder_path, f"{args.model_name}_best.pt") )
                 except:
@@ -364,7 +364,7 @@ def main():
         test(best_model, device, test_loader, args.num_classes, set_name="Best Model-Test Set")
         train_loader_corrupt = torch.utils.data.DataLoader(trainset_corrupt,**train_kwargs) # Remove Mixup before testing on TrainSet.
         test(best_model, device, train_loader_corrupt, args.num_classes, set_name="Best Model-Train Set")
-        if args.use_valset:
+        if args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
             test(best_model, device, val_loader_corrupt, args.num_classes, set_name="Best Model-Val Set")
 
 
