@@ -232,14 +232,6 @@ def main():
         args.model_name = f"{args.model_name}_mixup{args.mixup_alpha}"
         args.group_name = f"{args.group_name}-MixUp{args.mixup_alpha}"
         args.run_name = f"{args.run_name}_mixup-alpha{args.mixup_alpha}"
-    if args.gls_smoothing is not None:
-        args.model_name = f"{args.model_name}_gls{args.gls_smoothing}"
-        args.group_name = f"{args.group_name}-GLS{args.gls_smoothing}"
-        args.run_name = f"{args.run_name}_gls-smoothing{args.gls_smoothing}"
-    if args.estop_delta is not None:
-        args.model_name = f"{args.model_name}_estop{args.estop_delta}"
-        args.group_name = f"{args.group_name}-EStop{args.estop_delta}"
-        args.run_name = f"{args.run_name}_early-stopping{args.estop_delta}"
     if args.mnet_gamma_p is not None:
         if args.mmix_alpha is not None:
             args.model_name = f"{args.model_name}-mmix{args.mnet_gamma_p}_{args.mmix_alpha}"
@@ -249,7 +241,18 @@ def main():
             args.model_name = f"{args.model_name}-mnet{args.mnet_gamma_p}"
             args.group_name = f"{args.group_name}-MNet{args.mnet_gamma_p}"
             args.run_name = f"{args.run_name}_MentorNet{args.mnet_gamma_p}"
-
+    if args.gls_smoothing is not None:
+        args.model_name = f"{args.model_name}_gls{args.gls_smoothing}"
+        args.group_name = f"{args.group_name}-GLS{args.gls_smoothing}"
+        args.run_name = f"{args.run_name}_gls-smoothing{args.gls_smoothing}"
+    if args.estop_delta is not None:
+        args.model_name = f"{args.model_name}_estop{args.estop_delta}"
+        args.group_name = f"{args.group_name}-EStop{args.estop_delta}"
+        args.run_name = f"{args.run_name}_early-stopping{args.estop_delta}"
+    
+    print("-"*40)
+    print("Initialized Run Variables")
+    print("-"*40)
     # Creating Synthetic Corrupt dataset if required 
     dataset_corrupt, corrupt_samples, (index_list, old_targets, updated_targets) = get_mislabeled_dataset(copy.deepcopy(dataset1), args.percentage_mislabeled, args.num_classes, args.clean_partition, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}")
     if args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
@@ -259,17 +262,20 @@ def main():
         r=np.arange(num_of_data_points)
         np.random.shuffle(r)
         val_index = r[:num_of_val_samples].tolist()
-        
         if os.path.exists(f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.corrupt_val_index"):
             val_index = torch.load(f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.corrupt_val_index") 
         else:
             torch.save(val_index, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}.corrupt_val_index") 
-        train_index = [idx for idx in np.arange(num_of_data_points) if idx not in val_index]
+        train_index = np.setdiff1d(np.arange(num_of_data_points), np.array(val_index))
+        
         trainset_corrupt = torch.utils.data.Subset(dataset_corrupt, train_index)
         valset_corrupt = torch.utils.data.Subset(dataset_corrupt, val_index)
     else:
         trainset_corrupt = dataset_corrupt
         valset_corrupt = None
+    print("-"*40)
+    print("Dataset Created")
+    print("-"*40)
     # Does mixup if mixup_alpha set.
     if args.mixup_alpha is not None:
         mixup_function = v2.MixUp(alpha=args.mixup_alpha, num_classes=args.num_classes) 
@@ -281,9 +287,20 @@ def main():
     # Creates dataloader
     train_loader_corrupt = torch.utils.data.DataLoader(trainset_corrupt,**train_kwargs, collate_fn=collate_fn)
     if args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
-        val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)
-    
-    test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)   
+        val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)    
+    test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)  
+    # Setup MentorNet model and optimizer.
+    indexed_trainset_corrupt = IndexedDataset(trainset_corrupt)      
+    indexed_train_loader_corrupt = torch.utils.data.DataLoader(indexed_trainset_corrupt,**train_kwargs, collate_fn=collate_fn)
+    loss_p_prev = 0
+    loss_p_second_prev = 0
+    if args.mnet_gamma_p is not None:
+        mnet = MentorNet("threshold").to(device)
+    else:
+        mnet = None 
+    print("-"*40)
+    print("DataLoader Created")
+    print("-"*40)
     # Create optimizer and scheduler.
     if args.sam_rho is not None:
         base_optimizer = torch.optim.SGD
@@ -294,22 +311,12 @@ def main():
         scheduler = optim.lr_scheduler.StepLR(optimizer, args.step_schedule, args.gamma)
     else:
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', factor=args.gamma)
-    # Setup MentorNet model and optimizer.
-    indexed_trainset_corrupt = IndexedDataset(trainset_corrupt)      
-    indexed_train_loader_corrupt = torch.utils.data.DataLoader(indexed_trainset_corrupt,**train_kwargs, collate_fn=collate_fn)
-    loss_p_prev = 0
-    loss_p_second_prev = 0
-    if args.mnet_gamma_p is not None:
-        mnet = MentorNet("threshold").to(device)
-    else:
-        mnet = None
-        
-        
     # Initialize the EarlyStopper
     if args.estop_delta is not None:
         early_stopper = EarlyStopper(patience=5, min_delta=args.estop_delta)
-
-    
+    print("-"*40)
+    print("Optimizer and Scheduler Created")
+    print("-"*40)
     # Initializes the save path and checks if the file exits. Terminates to avoid overwriting.
     save_folder_path = os.path.join(f"{args.model_path}",f"{args.dataset}_{args.project_name}",f"{args.group_name}")
     if not os.path.exists(save_folder_path):
@@ -317,7 +324,6 @@ def main():
     if os.path.exists( os.path.join(save_folder_path, f"{args.model_name}_final.pt")):
         if not args.do_not_save:
             raise FileExistsError     
-    
     # Set Wandb login
     run = wandb.init(
                     # Set the project where this run will be logged
@@ -348,6 +354,7 @@ def main():
         if args.estop_delta is not None:
             if early_stopper.early_stop(validation_loss):             
                 break
+            
     if not args.dry_run:
         # Save the best and final model.
         if not args.do_not_save:
