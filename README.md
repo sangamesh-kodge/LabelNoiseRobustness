@@ -1,4 +1,4 @@
-# Implementation for several label noise robust training approaches.
+# [Label Noise Robustness-PyTorch] Implementation for several training algorithms.
 
 This repository implements different approaches for label noise robustness on the WebVision Dataset, a real-world noisy dataset. Additionally we also support adding synthetic noise to standard datasets.
 
@@ -48,8 +48,8 @@ pip install -r requirements.txt
 ``` -->
 
 ## Methods Implemented
-
-1. [Mixup](https://arxiv.org/pdf/1806.05236.pdf)- enhances model robustness by linearly interpolating between pairs of training examples and their corresponding labels. Specifically, it generates augmented training samples by blending two input samples and their labels. This process introduces beneficial noise during training, which helps the model learn more effectively even when the training data contains noisy labels. To use mixup add the cli argument ```--mixup-alpha <value-of-hyperparameter-alpha>```. For example, ```--mixup-alpha 0.2``` means the alpha hyperparameter is set to 0.1.
+1. Vanilla SGD - Standard Stochastic Gradient Descent algorithm. 
+2. [Mixup](https://arxiv.org/pdf/1806.05236.pdf)- enhances model robustness by linearly interpolating between pairs of training examples and their corresponding labels. Specifically, it generates augmented training samples by blending two input samples and their labels. This process introduces beneficial noise during training, which helps the model learn more effectively even when the training data contains noisy labels. To use mixup add the cli argument ```--mixup-alpha <value-of-hyperparameter-alpha>```. For example, ```--mixup-alpha 0.2``` means the alpha hyperparameter is set to 0.1.
 
 2. [SAM (Sharpness-Aware Minimization)](https://arxiv.org/pdf/2010.01412.pdf)- Instead of solely minimizing the loss value, SAM aims to find a balance between low loss and smoothness. It encourages the model to explore regions with uniformly low loss, avoiding sharp spikes that might lead to overfitting. SAM exhibits remarkable resilience to noisy labels. To use SAM add the cli argument ```--sam-rho <value-of-hyperparameter-rho>```. For example, ```--sam-rho 0.1``` means the rho hyperparameter is set to 0.1.
 
@@ -57,14 +57,13 @@ pip install -r requirements.txt
 3. [Generalized Label Smoothening](https://arxiv.org/pdf/2106.04149.pdf)(NLS) - is a variant of Label Smoothing (LS) that uses a negative or positive weight to combine the hard and soft labels. It is designed to improve the robustness of the model when learning with noisy labels, especially in high noise regimes. To use NLS, you can add the cli argument ```--gls-smoothing <value-of-hyperparameter-smoothing-rate>```. For example, ```--gls-smoothing -0.2``` means using NLS with a weight of -0.2 for the soft labels.
 
 4. [Early stopping](https://arxiv.org/abs/1903.11680) - is a regularization technique that stops the training of a neural network when the performance on a validation set stops improving or starts to deteriorate. It prevents overfitting by avoiding training the model for too many epochs, which can cause the model to memorize the training data and lose generalization ability. To use Early Stopping, you can add the cli argument ```--estop-delta <value-of-hyperparameter-min-delta>```. For example, ```--estop-delta 0.05``` means using min_delta  of 0.05.
+5. [MentorNet](https://arxiv.org/pdf/1712.05055.pdf) - learns a data-driven curriculum dynamically with StudentNet. To use MentorNet, you can add the cli argument ```--mnet-gamma-p <value-of-hyperparameter-gamma-p>```. For example, ```--mnet-gamma-p 0.85``` means using gamma-p  of 0.85.
 
+6. [MentorMix](https://arxiv.org/pdf/1911.09781.pdf) develops on the idea of MentorNet and Mixup. To use MentorMix, you can add the cli argument ```--mnet-gamma-p <value-of-hyperparameter-gamma-p> --mmix-alpha <value-of-hyperparameter-alpha >```. For example, ```--mnet-gamma-p 0.85 --mmix-alpha  0.2``` means using gamma-p  of 0.85 and alpha 0.2.
 ### Stay tuned for future updates
-The following methods are planned to be implemented:
-
-- [MentorMix](https://arxiv.org/pdf/1911.09781.pdf) 
+The following methods are planned to be implemented. 
 - [Curvature Penalty](https://openreview.net/pdf?id=2B2xIJ299rx) 
 - [Sample Sieve](https://openreview.net/forum?id=2VXyy9mIyU3)
-- [MentorNet](https://arxiv.org/pdf/1712.05055.pdf)
 
 
 ## Supported Datasets
@@ -84,7 +83,14 @@ In addition to the real-world noisy dataset, synthetic noise is introduced into 
 
 
 ## Results
-This section will be update soon with the results.
+The results for Mini-WebVision dataset averaged over 3 randomly chosen seeds.
+| Method          | Accuracy|
+|---------------|-------|
+| Vanilla SGD  | 63.81 $\pm$ 0.38|
+| MixUp       | 65.01 $\pm$ 0.40 |
+| MentorMix      | 65.35 $\pm$ 0.65 |
+| SAM       | 65.68 $\pm$ 0.57 |
+
 
 ### License
 
