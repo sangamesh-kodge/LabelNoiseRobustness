@@ -84,6 +84,15 @@ In addition to the real-world noisy dataset, synthetic noise is introduced into 
 - [CIFAR100](https://www.cs.toronto.edu/~kriz/cifar.html)
 - [ImageNet](https://www.image-net.org/)
 
+## Supported Network Architecture
+See model description files in directory ```./models```. We add links to the papers for the correponding network below. 
+- [LeNet5](https://ieeexplore.ieee.org/document/726791) - for MNIST
+- [ResNets](https://arxiv.org/pdf/1512.03385.pdf) - for CIFAR, ImageNet , WebVision and Clothing1M
+- [VGGs](https://arxiv.org/pdf/1409.1556.pdf) - for CIFAR, ImageNet and WebVision
+- [InceptionResNetv2](https://arxiv.org/pdf/1602.07261.pdf) - for CIFAR, ImageNet , WebVision and Clothing1M
+- [Vision Transformers (ViTs)](https://arxiv.org/pdf/2010.11929.pdf) - for CIFAR, ImageNet, WebVision and Clothing1M
+
+
 
 ## Results
 The results for real world dataset averaged over 3 randomly chosen seeds (32087,35416,12484).
@@ -95,6 +104,15 @@ The results for real world dataset averaged over 3 randomly chosen seeds (32087,
     | MentorMix      | 65.35 $\pm$ 0.65 |
     | SAM       | 65.68 $\pm$ 0.57 |
 
+2. WebVision1.0 on InceptionResNetV2
+    | Method          | Accuracy|
+    |---------------|-------|
+    | Vanilla SGD  |  $\pm$ |
+
+3. Clothing1M on ViT_B_16
+    | Method          | Accuracy|
+    |---------------|-------|
+    | Vanilla SGD  |  $\pm$ |
 
 
 ### License
