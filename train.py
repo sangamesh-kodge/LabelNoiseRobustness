@@ -10,7 +10,7 @@ import wandb
 from sklearn.metrics import confusion_matrix
 import numpy as np
 import os
-from utils import get_dataset, get_model, get_mislabeled_dataset, SAM, loss_gls, EarlyStopper, IndexedDataset, MentorMixLoss, MentorNetLoss
+from utils import get_dataset, get_test_set_clothing, get_model, get_mislabeled_dataset, SAM, loss_gls, EarlyStopper, IndexedDataset, MentorMixLoss, MentorNetLoss
 from models.mentornet import MentorNet
 import random 
 import copy
@@ -255,7 +255,11 @@ def main():
     print("-"*40)
     # Creating Synthetic Corrupt dataset if required 
     dataset_corrupt, corrupt_samples, (index_list, old_targets, updated_targets) = get_mislabeled_dataset(copy.deepcopy(dataset1), args.percentage_mislabeled, args.num_classes, args.clean_partition, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}")
-    if args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
+    if "clothing" in args.dataset:
+        args.use_valset = True
+        trainset_corrupt = torch.utils.data.Subset(dataset_corrupt)
+        valset_corrupt = torch.utils.data.Subset(dataset2)        
+    elif args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
         ### split corrupt data into train and val.
         num_of_data_points = len(dataset_corrupt)
         num_of_val_samples = int(args.use_valset  * num_of_data_points)
@@ -287,8 +291,12 @@ def main():
     # Creates dataloader
     train_loader_corrupt = torch.utils.data.DataLoader(trainset_corrupt,**train_kwargs, collate_fn=collate_fn)
     if args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
-        val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)    
-    test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)  
+        val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)
+    if "clothing" in args.dataset.lower():
+        test_set = get_test_set_clothing(args)
+        test_loader = torch.utils.data.DataLoader(test_set, **test_kwargs)  
+    else: 
+        test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)  
     # Setup MentorNet model and optimizer.
     indexed_trainset_corrupt = IndexedDataset(trainset_corrupt)      
     indexed_train_loader_corrupt = torch.utils.data.DataLoader(indexed_trainset_corrupt,**train_kwargs, collate_fn=collate_fn)
@@ -373,6 +381,7 @@ def main():
         test(best_model, device, train_loader_corrupt, args.num_classes, set_name="Best Model-Train Set")
         if args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
             test(best_model, device, val_loader_corrupt, args.num_classes, set_name="Best Model-Val Set")
+     
 
 
     wandb.finish()

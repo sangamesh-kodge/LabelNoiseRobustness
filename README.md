@@ -1,6 +1,6 @@
 # [Label Noise Robustness-PyTorch] Implementation for several training algorithms.
 
-This repository implements different approaches for label noise robustness on the WebVision Dataset, a real-world noisy dataset. Additionally we also support adding synthetic noise to standard datasets.
+This repository implements different approaches for label noise robustness on the WebVision1.0 and Clothing1M Dataset, a real-world noisy dataset. Additionally we also support adding synthetic noise to standard datasets (MNIST,CIFAR, ImageNet).
 
 ## Setup the directory.
 
@@ -74,6 +74,9 @@ The real-world noisy dataset used in this project is the WebVision dataset, desi
 
 2. [Mini-WebVision](https://arxiv.org/abs/1911.09781)- is a subset of the first 50 classes of Goole partition of WebVision 1.0 dataset (contains about 61234 training images). We use [Mini-WebVision](https://github.com/sangamesh-kodge/Mini-WebVision) code to extract dataset.
 
+
+3. [Clothing1M](https://www.cv-foundation.org/openaccess/content_cvpr_2015/papers/Xiao_Learning_From_Massive_2015_CVPR_paper.pdf)- is a 14 class dataset containing clothes (dataset has 1000000 training images with noisy labels). We use [Clothing1M](https://github.com/sangamesh-kodge/Clothing1M) code to extract dataset.
+
 ### Synthetic Noise in standard dataset. 
 In addition to the real-world noisy dataset, synthetic noise is introduced into standard datasets for further analysis and evaluation of label noise robustness. Set the ```--percentage-mislabeled``` command line argument to desired level of label noise percentage for adding synthetic uniform noise to standard dataset. The following standard datasets are used with synthetic noise:
 - [MNIST](https://ieeexplore.ieee.org/document/6296535)
@@ -83,13 +86,15 @@ In addition to the real-world noisy dataset, synthetic noise is introduced into 
 
 
 ## Results
-The results for Mini-WebVision dataset averaged over 3 randomly chosen seeds.
-| Method          | Accuracy|
-|---------------|-------|
-| Vanilla SGD  | 63.81 $\pm$ 0.38|
-| MixUp       | 65.01 $\pm$ 0.40 |
-| MentorMix      | 65.35 $\pm$ 0.65 |
-| SAM       | 65.68 $\pm$ 0.57 |
+The results for real world dataset averaged over 3 randomly chosen seeds (32087,35416,12484).
+1. Mini-WebVision on InceptionResNetV2
+    | Method          | Accuracy|
+    |---------------|-------|
+    | Vanilla SGD  | 63.81 $\pm$ 0.38|
+    | MixUp       | 65.01 $\pm$ 0.40 |
+    | MentorMix      | 65.35 $\pm$ 0.65 |
+    | SAM       | 65.68 $\pm$ 0.57 |
+
 
 
 ### License

@@ -145,9 +145,51 @@ def get_dataset(args):
                 dataset2 = datasets.ImageFolder(root=os.path.join(args.data_path, "val"), transform=test_transform)
             else:
                 raise ValueError
+    elif "clothing" in args.dataset.lower():
+        if args.arch.lower() == "inceptionresnetv2":
+            args.resize_image = 299
+        else:
+            args.resize_image = 224
+
+        train_transform=v2.Compose([ 
+            v2.RandomResizedCrop((args.resize_image,args.resize_image)),
+            v2.RandomHorizontalFlip(),
+            v2.ToTensor(),
+            v2.Normalize(mean=[0.485, 0.456, 0.406],
+                                            std=[0.229, 0.224, 0.225]),    
+            ])
+
+        test_transform=v2.Compose([
+            v2.Resize((args.resize_image,args.resize_image)),
+            v2.ToTensor(),
+            v2.Normalize(mean=[0.485, 0.456, 0.406],
+                                            std=[0.229, 0.224, 0.225])     
+            ])
+        args.num_classes = 14
+        args.class_label_names = ["T-Shirt", "Shirt", "Knitwear", "Chiffon", "Sweater", "Hoodie", "Windbreaker", "Jacket", "Downcoat", "Suit", "Shawl", "Dress", "Vest", "Underwear"]
+        if args.train_transform:
+            dataset1 = datasets.ImageFolder(root=os.path.join(args.data_path, "noisy_train"), transform=train_transform)
+        else:
+            dataset1 = datasets.ImageFolder(root=os.path.join(args.data_path, "noisy_train"), transform=test_transform)
+        dataset2 = datasets.ImageFolder(root=os.path.join(args.data_path, "val"), transform=test_transform)
     else:
         raise ValueError
     return dataset1, dataset2
+
+def get_test_set_clothing(args):
+    if args.arch.lower() == "inceptionresnetv2":
+        args.resize_image = 299
+    else:
+        args.resize_image = 224
+
+    test_transform=v2.Compose([
+        v2.Resize((args.resize_image,args.resize_image)),
+        v2.ToTensor(),
+        v2.Normalize(mean=[0.485, 0.456, 0.406],
+                                        std=[0.229, 0.224, 0.225])     
+        ])
+    test_set = datasets.ImageFolder(root=os.path.join(args.data_path, "test"), transform=test_transform)
+    return test_set
 
 def get_mislabeled_dataset(dataset, percentage_mislabeled, num_classes, return_clean_partition, path):
     if os.path.exists(f"{path}.mislabeled_points"):
@@ -209,10 +251,10 @@ class IndexedDataset(Dataset):
 def get_model(args,device):
     if  ( ("linear" in args.arch.lower() or "lenet" in args.arch.lower()) and ("mnist" not  in args.dataset.lower() ) ) or \
     ( ("vgg" in args.arch.lower() or "resnet" in args.arch.lower()) and ("mnist" in args.dataset.lower()) ) \
-    or ("vit" in args.arch.lower() and  ( "imagenet" not in args.dataset.lower() or "webvision" not in args.dataset.lower() ) ):
+    or ("vit" in args.arch.lower() and  not ( "imagenet" in args.dataset.lower() or "webvision" in args.dataset.lower() or "clothing" in args.dataset.lower() ) ):
         # line 1 -> Linear or LeNet arch -> MNIST Dataset
         # line 2 -> VGG or ResNet arch -> Not MNIST Dataset
-        # line 3 -> VIT ->  imagenet or webvision dataset
+        # line 3 -> VIT ->  imagenet or webvision or clothing dataset
         raise ValueError
     # Instantiate model
     if "linear" in args.arch.lower():
