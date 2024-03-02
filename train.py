@@ -215,6 +215,26 @@ def main():
     dataset1, dataset2 = get_dataset(args)
     # Check trained model!
     model = get_model(args, device)
+    if args.load_loc is not None:            
+        print("-"*40)
+        print(f"Loading model from {args.load_loc}")
+        load_state_dict = torch.load(args.load_loc)
+        model_state_dict = model.state_dict()
+        size_mismatch = set()
+        missing_keys = set()
+        for key in model_state_dict:
+            if key in load_state_dict:
+                if load_state_dict[key].shape == model_state_dict[key].shape:
+                    model_state_dict[key].copy_(load_state_dict[key])
+                else:
+                    size_mismatch.add(key)
+            else:
+                if "batch" not in key and "bn" not in key:
+                    missing_keys.add(key) 
+        model.load_state_dict(model_state_dict)    
+        print(f"Loaded keys and the following keys not loaded: \n SIZE MISMATCH ------> {size_mismatch}\n MISSING ------> {missing_keys}")
+        print("-"*40)
+
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))
 

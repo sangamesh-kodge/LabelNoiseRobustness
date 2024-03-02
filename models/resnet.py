@@ -140,7 +140,7 @@ class ResNet_imagenet(nn.Module):
            
     
 def ResNet18(num_classes=1000, dataset = "imagenet", do_log_softmax=False):
-    if "imagenet" in dataset.lower() or "webvision" in dataset.lower():
+    if "imagenet" in dataset.lower() or "webvision" in dataset.lower() or "clothing" in dataset.lower():
         ResNet = ResNet_imagenet
     elif "cifar" in dataset.lower():
         ResNet = ResNet_cifar
@@ -150,7 +150,7 @@ def ResNet18(num_classes=1000, dataset = "imagenet", do_log_softmax=False):
 
 
 def ResNet34(num_classes=1000, dataset = "imagenet"):
-    if "imagenet" in dataset.lower() or "webvision" in dataset.lower():
+    if "imagenet" in dataset.lower() or "webvision" in dataset.lower() or "clothing" in dataset.lower():
         ResNet = ResNet_imagenet
     elif "cifar" in dataset.lower():
         ResNet = ResNet_cifar
@@ -160,7 +160,7 @@ def ResNet34(num_classes=1000, dataset = "imagenet"):
 
 
 def ResNet50(num_classes=1000, dataset = "imagenet"):
-    if "imagenet" in dataset.lower() or "webvision" in dataset.lower():
+    if "imagenet" in dataset.lower() or "webvision" in dataset.lower() or "clothing" in dataset.lower():
         ResNet = ResNet_imagenet
     elif "cifar" in dataset.lower():
         ResNet = ResNet_cifar
@@ -170,7 +170,7 @@ def ResNet50(num_classes=1000, dataset = "imagenet"):
 
 
 def ResNet101(num_classes=1000, dataset = "imagenet"):
-    if "imagenet" in dataset.lower() or "webvision" in dataset.lower():
+    if "imagenet" in dataset.lower() or "webvision" in dataset.lower() or "clothing" in dataset.lower():
         ResNet = ResNet_imagenet
     elif "cifar" in dataset.lower():
         ResNet = ResNet_cifar
@@ -180,7 +180,7 @@ def ResNet101(num_classes=1000, dataset = "imagenet"):
 
 
 def ResNet152(num_classes=1000, dataset = "imagenet"):
-    if "imagenet" in dataset.lower() or "webvision" in dataset.lower():
+    if "imagenet" in dataset.lower() or "webvision" in dataset.lower() or "clothing" in dataset.lower():
         ResNet = ResNet_imagenet
     elif "cifar" in dataset.lower():
         ResNet = ResNet_cifar

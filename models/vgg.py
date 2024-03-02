@@ -18,7 +18,7 @@ class VGG(nn.Module):
     def __init__(self, features, num_classes = 10, dataset="imagenet", do_log_softmax=False, dropout: float = 0.5):
         super(VGG, self).__init__()
         self.features = features
-        if "imagenet" in dataset.lower() or "webvision" in dataset.lower() :
+        if "imagenet" in dataset.lower() or "webvision" in dataset.lower() or "clothing" in dataset.lower() :
             self.classifier = nn.Sequential(
                 nn.Linear(512*7*7, 4096),
                 nn.ReLU(True),
