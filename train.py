@@ -276,9 +276,7 @@ def main():
     # Creating Synthetic Corrupt dataset if required 
     dataset_corrupt, corrupt_samples, (index_list, old_targets, updated_targets) = get_mislabeled_dataset(copy.deepcopy(dataset1), args.percentage_mislabeled, args.num_classes, args.clean_partition, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}")
     if "clothing" in args.dataset:
-        args.use_valset = True
         trainset_corrupt = torch.utils.data.Subset(dataset_corrupt)
-        valset_corrupt = torch.utils.data.Subset(dataset2)        
     elif args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
         ### split corrupt data into train and val.
         num_of_data_points = len(dataset_corrupt)
@@ -310,11 +308,13 @@ def main():
             return default_collate(batch)
     # Creates dataloader
     train_loader_corrupt = torch.utils.data.DataLoader(trainset_corrupt,**train_kwargs, collate_fn=collate_fn)
-    if args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
-        val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)
     if "clothing" in args.dataset.lower():
         test_set = get_test_set_clothing(args)
-        test_loader = torch.utils.data.DataLoader(test_set, **test_kwargs)  
+        val_loader_corrupt = torch.utils.data.DataLoader(dataset2,**test_kwargs)
+        test_loader = torch.utils.data.DataLoader(test_set, **test_kwargs)
+    elif args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
+        val_loader_corrupt = torch.utils.data.DataLoader(valset_corrupt,**test_kwargs)      
+        test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)  
     else: 
         test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)  
     # Setup MentorNet model and optimizer.
@@ -372,7 +372,7 @@ def main():
                 scheduler.step(train_loss, epoch=(epoch+1))
             else:
                 scheduler.step()
-        if args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
+        if (args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0) or "clothing" in args.dataset.lower():
             validation_loss=test(model, device, val_loader_corrupt, args.num_classes)
             if validation_loss <= min_validation_loss:
                 best_model = copy.deepcopy(model) 
