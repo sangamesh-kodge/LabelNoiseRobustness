@@ -275,8 +275,8 @@ def main():
     print("-"*40)
     # Creating Synthetic Corrupt dataset if required 
     dataset_corrupt, corrupt_samples, (index_list, old_targets, updated_targets) = get_mislabeled_dataset(copy.deepcopy(dataset1), args.percentage_mislabeled, args.num_classes, args.clean_partition, f"{args.model_path}/{args.dataset}_{args.arch}_{args.percentage_mislabeled}_seed{args.seed}")
-    if "clothing" in args.dataset:
-        trainset_corrupt = torch.utils.data.Subset(dataset_corrupt)
+    if "clothing" in args.dataset.lower():
+        trainset_corrupt = dataset_corrupt
     elif args.use_valset is not None and args.use_valset > 0.0 and args.use_valset <=1.0:
         ### split corrupt data into train and val.
         num_of_data_points = len(dataset_corrupt)
