@@ -96,23 +96,25 @@ See model description files in directory ```./models```. We add links to the pap
 
 ## Results
 The results for real world dataset averaged over 3 randomly chosen seeds (32087,35416,12484).
-1. Mini-WebVision on InceptionResNetV2
-    | Method          | Accuracy|
-    |---------------|-------|
-    | Vanilla SGD  | 63.81 $\pm$ 0.38|
-    | MixUp       | 65.01 $\pm$ 0.40 |
-    | MentorMix      | 65.35 $\pm$ 0.65 |
-    | SAM       | 65.68 $\pm$ 0.57 |
+1. Mini-WebVision on InceptionResNetV2 (from Scratch)
+    | Method            | Accuracy          |
+    |---------------    |-------            |
+    | Vanilla SGD       | 63.81 $\pm$ 0.38  |
+    | MixUp             | 65.01 $\pm$ 0.40  |
+    | MentorMix         | 65.35 $\pm$ 0.65  |
+    | SAM               | 65.68 $\pm$ 0.57  |
 
-2. WebVision1.0 on InceptionResNetV2
-    | Method          | Accuracy|
-    |---------------|-------|
-    | Vanilla SGD  |  $\pm$ |
+2. WebVision1.0 on InceptionResNetV2 (from Scratch)
+    | Method          | Accuracy            |
+    |---------------    |-------            |
+    | Vanilla SGD       |  64.86 $\pm$ 0.53 |
+    | MixUp             |  66.39 $\pm$ 0.41 |
 
-3. Clothing1M on ViT_B_16
-    | Method          | Accuracy|
-    |---------------|-------|
-    | Vanilla SGD  |  $\pm$ |
+3. Clothing1M on ResNet50  (from PyTorch model pretrained on ImageNet1K)
+    | Method            | Accuracy          |
+    |---------------    |-------            |
+    | Vanilla SGD       |  67.48 $\pm$ 0.64 |
+    | MixUp             |  67.89 $\pm$ 0.63 |
 
 
 ### License
