@@ -1,6 +1,6 @@
 # [Label Noise Robustness-PyTorch] Implementation for several training algorithms.
 
-This repository implements different approaches for label noise robustness on the WebVision1.0 and Clothing1M Dataset, a real-world noisy dataset. Additionally we also support adding synthetic noise to standard datasets (MNIST,CIFAR, ImageNet).
+This repository implements different approaches for label noise robustness on the WebVision1.0 and Clothing1M Dataset, a real-world noisy dataset. Additionally we also support adding synthetic noise to standard datasets (MNIST,CIFAR, ImageNet). Check our other repository [Verifix](https://github.com/sangamesh-kodge/Verifix) to improve generalization of model trained with noisy labels.
 
 ## Setup the directory.
 
@@ -121,21 +121,22 @@ The results for real world dataset averaged over 3 randomly chosen seeds (32087,
 
 This project is licensed under the [Apache 2.0 License](LICENSE).
 
-## Citation.
-If you find this repository helpful and use  it in your research, please consider citing our work using the following:
+# Citation
+Kindly cite the [paper](https://arxiv.org/abs/2403.08618) if you use the code.  Thanks!
 
-APA
+### APA
 ```
-Kodge, S. (2024). Implementation for several label noise robust training approaches. [Computer software]. https://github.com/sangamesh-kodge/LabelNoiseRobustness
+Kodge, S., Ravikumar, D., Saha, G., & Roy, K. (2024). Verifix: Post-Training Correction to Improve Label Noise Robustness with Verified Samples. https://arxiv.org/abs/2403.08618
 ```
-
-Bibtex
+or 
+### Bibtex
 ```
-@software{Kodge_Implementation_for_several_2024,
-author = {Kodge, Sangamesh},
-month = feb,
-title = {{Implementation for several label noise robust training approaches.}},
-url = {https://github.com/sangamesh-kodge/LabelNoiseRobustness},
-year = {2024}
+@misc{kodge2024verifix,
+      title={Verifix: Post-Training Correction to Improve Label Noise Robustness with Verified Samples}, 
+      author={Sangamesh Kodge and Deepak Ravikumar and Gobinda Saha and Kaushik Roy},
+      year={2024},
+      eprint={2403.08618},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
 }
 ```
